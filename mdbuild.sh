@@ -70,7 +70,6 @@ load_buildenv()
 	CMAKE_BUILD_DIR="$CMAKE_ROOT/$CMAKE_BUILD_BASE/$CMAKE_BUILD_SUFFIX"
 	[ -z "$CMAKE_ROOT" ] || [ ! -f "$CMAKE_MAKEFILE" ] && return 1
 	[ -d "$CMAKE_BUILD_DIR" ] || mkdir -p "$CMAKE_BUILD_DIR" || return 1
-	CMAKE_MAKE_PROG=`cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2`
 	MAKE_DIR=`realpath "$CMAKE_BUILD_DIR/${MAKE_DIR##$CMAKE_ROOT}"`
 	return 0
 }
@@ -98,6 +97,7 @@ main()
 			(cd "$CMAKE_BUILD_DIR" && cmake $@ "$CMAKE_ROOT");;
 			make)
 			shift
+			MAKE_PROG=$(cd "$CMAKE_BUILD_DIR" && cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)
 			if [ -d "$MAKE_DIR" ]; then
 				(cd $MAKE_DIR && $MAKE_PROG $@)
 			else
