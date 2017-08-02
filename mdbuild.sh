@@ -95,17 +95,18 @@ main()
 				-h | --help) cmake --help && exit $?
 			esac
 			(cd "$CMAKE_BUILD_DIR" && cmake $@ "$CMAKE_ROOT");;
-			make)
+		make)
 			shift
 			MAKE_PROG=$(cd "$CMAKE_BUILD_DIR" && cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)
-			if [ -d "$MAKE_DIR" ]; then
-				(cd $MAKE_DIR && $MAKE_PROG $@)
-			else
-				(cd "$CMAKE_BUILD_DIR" && $MAKE_PROG $@)
-			fi;;
+			[ -d "$MAKE_DIR" ] \
+				&& (cd $MAKE_DIR && $MAKE_PROG $@) \
+				||(cd "$CMAKE_BUILD_DIR" && $MAKE_PROG $@);;
 		show)
 			shift
-			echo $(set | grep -e "^$1" | sed "s|$1=||g");;
+			while [ "x$#" != "x0" ]; do
+				echo $(set | grep -e "^$1=" | sed "s|$1=||g")
+				shift
+			done;;
 		*) # undefined
 			usage "Unknown command: $@";;
 	esac
