@@ -3,8 +3,8 @@
 usage()
 {
 	[ "x$#" != "x0" ] &&  echo "$@"
-	cat <<- MDBUILD_HELP
-	mdbuild        -- a simple script around cmake
+	cat <<- CBUILD_HELP
+	cbuild        -- a simple script around cmake
 
 	Commands:
 
@@ -13,7 +13,7 @@ usage()
 	help           -- show this help dialog
 	make           -- invoke the configured make-program (forwards all args)
 	show           -- show environment and derived variables
-	MDBUILD_HELP
+	CBUILD_HELP
 	exit 1
 }
 
@@ -24,39 +24,24 @@ is_zero()
 
 load_git_vars()
 {
-	GIT_ROOT=`git rev-parse --show-toplevel`
+	: ${GIT_ROOT:="$(git rev-parse --show-toplevel)"}
 	is_zero $? || return 1
-	GIT_BRANCH=`git symbolic-ref --short HEAD`
-	GIT_TAG=`git describe --abbrev=0 2>/dev/null`
+	GIT_BRANCH="$(git symbolic-ref --short HEAD)"
+	GIT_TAG="$(git describe --abbrev=0 2>/dev/null)"
 	is_zero $? || GIT_TAG="0.0"
-	GIT_COMMIT_NR=`git log --pretty=oneline | wc -l`
+	GIT_COMMIT_NR="$(git log --pretty=oneline | wc -l)"
 	return 0
-}
-
-load_env_from_git()
-{
-	load_git_vars || return 1
-	CMAKE_BUILD_SUFFIX=`echo "$GIT_BRANCH" | sed "s|/|-|g"`
-	return 0
-}
-
-derive_env_from_cwd()
-{
-	echo "$0" not implmented && return 1
 }
 
 load_buildenv()
 {
 	: ${CMAKE_BUILD_BASE:=".build"}
-	# determine if we use vcs
-	load_env_from_git "$GIT_ROOT"
-	[ -z "$GIT_ROOT" ] && derive_env_from_cwd $1
-
-	# derive env for cmake
-	CURRENT_DIR=`realpath "$PWD"`
+	load_git_vars
+	CMAKE_BUILD_SUFFIX="$(echo "$GIT_BRANCH" | sed 's|/|-|g')"
+	CURRENT_DIR="$(realpath "$PWD")"
 	while [ "x$CURRENT_DIR" != "x/" ]; do
 		[ -f "$CURRENT_DIR/CMakeLists.txt" ] && : ${MAKE_DIR:=$CURRENT_DIR}
-		CURRENT_PARENT=`dirname "$CURRENT_DIR"`
+		CURRENT_PARENT="$(dirname "$CURRENT_DIR")"
 		if [ -f "$CURRENT_PARENT/CMakeLists.txt" ]; then
 			CURRENT_DIR="$CURRENT_PARENT"
 		else
@@ -70,7 +55,8 @@ load_buildenv()
 	CMAKE_BUILD_DIR="$CMAKE_ROOT/$CMAKE_BUILD_BASE/$CMAKE_BUILD_SUFFIX"
 	[ -z "$CMAKE_ROOT" ] || [ ! -f "$CMAKE_MAKEFILE" ] && return 1
 	[ -d "$CMAKE_BUILD_DIR" ] || mkdir -p "$CMAKE_BUILD_DIR" || return 1
-	MAKE_DIR=`realpath "$CMAKE_BUILD_DIR/${MAKE_DIR##$CMAKE_ROOT}"`
+	MAKE_DIR="$(realpath "$CMAKE_BUILD_DIR/${MAKE_DIR##$CMAKE_ROOT}")"
+	MAKE_PROG="$(cd "$CMAKE_BUILD_DIR" && cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)"
 	return 0
 }
 
@@ -97,7 +83,6 @@ main()
 			(cd "$CMAKE_BUILD_DIR" && cmake $@ "$CMAKE_ROOT");;
 		make)
 			shift
-			MAKE_PROG=$(cd "$CMAKE_BUILD_DIR" && cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)
 			[ -d "$MAKE_DIR" ] \
 				&& (cd $MAKE_DIR && $MAKE_PROG $@) \
 				||(cd "$CMAKE_BUILD_DIR" && $MAKE_PROG $@);;
