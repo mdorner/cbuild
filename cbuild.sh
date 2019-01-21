@@ -4,7 +4,7 @@ usage()
 {
 	[ "x$#" != "x0" ] &&  echo "$@"
 	cat <<- CBUILD_HELP
-	cbuild        -- a simple script around cmake
+	cbuild        -- a simple script helper around cmake with git
 
 	Commands:
 
@@ -35,9 +35,9 @@ load_git_vars()
 
 load_buildenv()
 {
-	: ${CMAKE_BUILD_BASE:=".build"}
+	: ${RELATIVE_BUILD_PATH:=".build"}
 	load_git_vars
-	CMAKE_BUILD_SUFFIX="$(echo "$GIT_BRANCH" | sed 's|/|-|g')"
+	BUILD_SUFFIX="$(echo "$GIT_BRANCH" | sed 's|/|-|g')"
 	CURRENT_DIR="$(realpath "$PWD")"
 	while [ "x$CURRENT_DIR" != "x/" ]; do
 		[ -f "$CURRENT_DIR/CMakeLists.txt" ] && : ${MAKE_DIR:=$CURRENT_DIR}
@@ -48,15 +48,17 @@ load_buildenv()
 			break
 		fi
 	done
+	PROJECT_ROOT="$CURRENT_DIR"
 	unset CURRENT_PARENT
-	CMAKE_ROOT="$CURRENT_DIR"
 	unset CURRENT_DIR
-	CMAKE_MAKEFILE="$CMAKE_ROOT/CMakeLists.txt"
-	CMAKE_BUILD_DIR="$CMAKE_ROOT/$CMAKE_BUILD_BASE/$CMAKE_BUILD_SUFFIX"
-	[ -z "$CMAKE_ROOT" ] || [ ! -f "$CMAKE_MAKEFILE" ] && return 1
-	[ -d "$CMAKE_BUILD_DIR" ] || mkdir -p "$CMAKE_BUILD_DIR" || return 1
-	MAKE_DIR="$(realpath "$CMAKE_BUILD_DIR/${MAKE_DIR##$CMAKE_ROOT}")"
-	MAKE_PROG="$(cd "$CMAKE_BUILD_DIR" && cmake -LA "$CMAKE_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)"
+
+	BUILD_ROOT="$PROJECT_ROOT/$RELATIVE_BUILD_PATH"
+	CMAKE_PROJECT_FILE="$PROJECT_ROOT/CMakeLists.txt"
+	BUILD_DIR="$BUILD_ROOT/$BUILD_SUFFIX"
+	[ -z "$PROJECT_ROOT" ] || [ ! -f "$CMAKE_PROJECT_FILE" ] && return 1
+	[ -d "$BUILD_DIR" ] || mkdir -p "$BUILD_DIR" || return 1
+	MAKE_DIR="$(realpath "$BUILD_DIR/${MAKE_DIR##$PROJECT_ROOT}")"
+	MAKE_PROG="$(cd "$BUILD_DIR" && cmake -LA "$PROJECT_ROOT" | grep -e "^CMAKE_MAKE_PROGRAM" | cut -d '=' -f 2)"
 	return 0
 }
 
@@ -73,19 +75,20 @@ main()
 	case $1 in
 		clean)
 			shift
-			echo "Now removing all of $CMAKE_BUILD_DIR"
-			rm -rf "$CMAKE_BUILD_DIR";;
+			echo "Now removing all of $BUILD_DIR"
+			rm -rf "$BUILD_DIR";;
 		conf*) # configure
 			shift
 			case $1 in
 				-h | --help) cmake --help && exit $?
 			esac
-			(cd "$CMAKE_BUILD_DIR" && cmake $@ "$CMAKE_ROOT");;
+			(cd "$BUILD_DIR" && cmake $@ "$PROJECT_ROOT");;
 		make)
 			shift
 			[ -d "$MAKE_DIR" ] \
 				&& (cd $MAKE_DIR && $MAKE_PROG $@) \
-				||(cd "$CMAKE_BUILD_DIR" && $MAKE_PROG $@);;
+				||(cd "$BUILD_DIR" && $MAKE_PROG $@)
+			ln -s "$BUILD_DIR" "$BUILD_ROOT/latest";;
 		show)
 			shift
 			while [ "x$#" != "x0" ]; do
